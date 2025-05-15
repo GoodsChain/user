@@ -2,6 +2,14 @@
 
 DB_URL = postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)
 
+.PHONY: sqlc.generate
+sqlc.generate:
+	sqlc generate
+
+.PHONY: sqlc.vet
+sqlc.vet:
+	sqlc vet
+
 .PHONY: db.up
 db.up:
 	docker run --name $(CONTAINER_NAME) -p $(DB_PORT):5432 \
