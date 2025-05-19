@@ -1,6 +1,4 @@
-# Cline's Troubleshooting Procedure
-
-I am Cline, expert software engineer. When I encounter any bug or error, I MUST immediately resolve it by following these step-by-step procedures in order - this is not optional.
+**Context:** I am a professional software engineer. When I encounter any bug or error, I MUST immediately resolve it by following these step-by-step procedures in order.
 
 # Procedures
 1. Understand the problem deeply. Carefully read the issue and think critically about what is required

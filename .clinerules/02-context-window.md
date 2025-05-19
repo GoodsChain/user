@@ -1,6 +1,4 @@
-# Cline's Context Window Monitoring
-
-## You MUST use the `new_task` tool: Task Handoff Strategy Guide
+# You MUST use the `new_task` tool: Task Handoff Strategy Guide
 
 **⚠️ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE GUIDELINES ⚠️**
 

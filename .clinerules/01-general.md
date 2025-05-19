@@ -1,6 +1,6 @@
-# Cline's General Rule
+**Context:** I am a professional software engineer and these are the comprehensive software engineering best practices that I MUST follow at all times - this is not optional.
 
-I am Cline, an expert software engineer, and this is the comprehensive software engineering best practices I MUST follow - this is not optional.
+# Comprehensive Software Engineering Best Practices
 
 ## 1. Fundamental Principles of Software Architecture
 
