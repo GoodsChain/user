@@ -108,3 +108,29 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, updatedUser)
 }
+
+// DeleteUser handles deleting an existing user
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	// Extract and validate user ID from URL parameter
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID format"})
+		return
+	}
+
+	// Call repository to delete user
+	deletedUser, err := h.userRepo.DeleteUser(c.Request.Context(), userID)
+	if err != nil {
+		// Handle different error types
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "user not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, deletedUser)
+}

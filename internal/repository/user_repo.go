@@ -14,6 +14,7 @@ import (
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *models.User) (*models.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, updates *models.UpdateUserRequest) (*models.User, error)
+	DeleteUser(ctx context.Context, id uuid.UUID) (*models.User, error)
 }
 
 // postgresUserRepository implements UserRepository for PostgreSQL
@@ -132,4 +133,33 @@ func (r *postgresUserRepository) UpdateUser(ctx context.Context, id uuid.UUID, u
 	}
 
 	return nil, fmt.Errorf("no user returned after update")
+}
+
+// DeleteUser deletes a user from the database
+func (r *postgresUserRepository) DeleteUser(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	// First, get the user data before deletion to return it
+	var userToDelete models.User
+	selectQuery := "SELECT id, email, full_name, phone, role, is_active, created_at, updated_at FROM users WHERE id = $1"
+	err := r.db.GetContext(ctx, &userToDelete, selectQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	// Delete the user
+	deleteQuery := "DELETE FROM users WHERE id = $1"
+	result, err := r.db.ExecContext(ctx, deleteQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return &userToDelete, nil
 }
