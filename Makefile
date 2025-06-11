@@ -2,6 +2,10 @@
 
 DB_URL = postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)
 
+.PHONY: run
+run:
+	go run main.go
+
 .PHONY: db.up
 db.up:
 	docker run --name $(CONTAINER_NAME) -p $(DB_PORT):5432 \
@@ -30,3 +34,7 @@ migrate.down:
 migrate.create:
 	@read -p "Enter migration name: " name; \
 	migrate create -ext sql -dir $(MIGRATIONS_DIR) -seq $${name}
+
+.PHONY: test
+test:
+	go test ./... -v
