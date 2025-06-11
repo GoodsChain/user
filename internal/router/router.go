@@ -15,6 +15,7 @@ func SetupRouter(userHandler *handler.UserHandler) *gin.Engine {
 		users := v1.Group("/users")
 		{
 			users.POST("/", userHandler.CreateUser)
+			users.PATCH("/:id", userHandler.UpdateUser)
 		}
 	}
 

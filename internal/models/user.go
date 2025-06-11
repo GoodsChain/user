@@ -25,3 +25,12 @@ type CreateUserRequest struct {
 	Phone    *string `json:"phone"`
 	Role     string  `json:"role" validate:"required,oneof=admin staff supplier"`
 }
+
+// UpdateUserRequest represents the request body for updating an existing user
+type UpdateUserRequest struct {
+	Email    *string `json:"email,omitempty" validate:"omitempty,email"`
+	FullName *string `json:"full_name,omitempty" validate:"omitempty,min=1"`
+	Phone    *string `json:"phone,omitempty"`
+	Role     *string `json:"role,omitempty" validate:"omitempty,oneof=admin staff supplier"`
+	IsActive *bool   `json:"is_active,omitempty"`
+}
