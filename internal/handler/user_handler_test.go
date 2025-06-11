@@ -30,6 +30,14 @@ func (m *MockUserRepository) CreateUser(ctx context.Context, user *models.User) 
 	return args.Get(0).(*models.User), args.Error(1)
 }
 
+func (m *MockUserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
 func (m *MockUserRepository) UpdateUser(ctx context.Context, id uuid.UUID, updates *models.UpdateUserRequest) (*models.User, error) {
 	args := m.Called(ctx, id, updates)
 	if args.Get(0) == nil {
@@ -61,6 +69,7 @@ func setupTestRouter(handler *UserHandler) *gin.Engine {
 	users := v1.Group("/users")
 	{
 		users.POST("/", handler.CreateUser)
+		users.GET("/:id", handler.GetUserByID)
 		users.PATCH("/:id", handler.UpdateUser)
 		users.DELETE("/:id", handler.DeleteUser)
 	}
@@ -517,6 +526,103 @@ func TestDeleteUser_DatabaseError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.Equal(t, "failed to delete user", response["error"])
+
+	mockRepo.AssertExpectations(t)
+}
+
+// TestGetUserByID_Success tests successful user retrieval
+func TestGetUserByID_Success(t *testing.T) {
+	handler, mockRepo := setupTestHandler()
+	router := setupTestRouter(handler)
+
+	userID := uuid.New()
+	expectedUser := &models.User{
+		ID:       userID,
+		Email:    "test@example.com",
+		FullName: "Test User",
+		Role:     "admin",
+		IsActive: true,
+	}
+
+	mockRepo.On("GetUserByID", mock.Anything, userID).Return(expectedUser, nil)
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s", userID.String()), nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response models.User
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, expectedUser.ID, response.ID)
+	assert.Equal(t, expectedUser.Email, response.Email)
+	assert.Equal(t, expectedUser.FullName, response.FullName)
+
+	mockRepo.AssertExpectations(t)
+}
+
+// TestGetUserByID_InvalidUUID tests handling of invalid UUID
+func TestGetUserByID_InvalidUUID(t *testing.T) {
+	handler, _ := setupTestHandler()
+	router := setupTestRouter(handler)
+
+	req, _ := http.NewRequest("GET", "/api/v1/users/invalid-uuid", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "invalid user ID format", response["error"])
+}
+
+// TestGetUserByID_UserNotFound tests handling when user doesn't exist
+func TestGetUserByID_UserNotFound(t *testing.T) {
+	handler, mockRepo := setupTestHandler()
+	router := setupTestRouter(handler)
+
+	userID := uuid.New()
+	mockRepo.On("GetUserByID", mock.Anything, userID).Return(nil, fmt.Errorf("user not found"))
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s", userID.String()), nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "user not found", response["error"])
+
+	mockRepo.AssertExpectations(t)
+}
+
+// TestGetUserByID_DatabaseError tests handling of general database errors
+func TestGetUserByID_DatabaseError(t *testing.T) {
+	handler, mockRepo := setupTestHandler()
+	router := setupTestRouter(handler)
+
+	userID := uuid.New()
+	mockRepo.On("GetUserByID", mock.Anything, userID).Return(nil, fmt.Errorf("database connection failed"))
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s", userID.String()), nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "failed to retrieve user", response["error"])
 
 	mockRepo.AssertExpectations(t)
 }

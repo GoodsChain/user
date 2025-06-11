@@ -13,6 +13,7 @@ import (
 // UserRepository defines the interface for user data operations
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *models.User) (*models.User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, updates *models.UpdateUserRequest) (*models.User, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) (*models.User, error)
 }
@@ -55,6 +56,19 @@ func (r *postgresUserRepository) CreateUser(ctx context.Context, user *models.Us
 	}
 
 	return nil, fmt.Errorf("no user returned after insert")
+}
+
+// GetUserByID retrieves a user by their ID
+func (r *postgresUserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	var user models.User
+	query := "SELECT id, email, full_name, phone, role, is_active, created_at, updated_at FROM users WHERE id = $1"
+	
+	err := r.db.GetContext(ctx, &user, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+	
+	return &user, nil
 }
 
 // UpdateUser updates an existing user in the database

@@ -55,6 +55,32 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdUser)
 }
 
+// GetUserByID handles retrieving a user by their ID
+func (h *UserHandler) GetUserByID(c *gin.Context) {
+	// Extract and validate user ID from URL parameter
+	userIDStr := c.Param("id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID format"})
+		return
+	}
+
+	// Call repository to get user
+	user, err := h.userRepo.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		// Handle different error types
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "user not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
 // UpdateUser handles updating an existing user
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Extract and validate user ID from URL parameter
