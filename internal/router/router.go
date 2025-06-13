@@ -14,6 +14,7 @@ func SetupRouter(userHandler *handler.UserHandler) *gin.Engine {
 	{
 		users := v1.Group("/users")
 		{
+			users.GET("/", userHandler.GetAllUsers)
 			users.POST("/", userHandler.CreateUser)
 			users.GET("/:id", userHandler.GetUserByID)
 			users.PATCH("/:id", userHandler.UpdateUser)

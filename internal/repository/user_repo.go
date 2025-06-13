@@ -16,6 +16,7 @@ type UserRepository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, updates *models.UpdateUserRequest) (*models.User, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) (*models.User, error)
+	GetAllUsers(ctx context.Context, filters *models.FilterParams, sort *models.SortParams, pagination *models.PaginationParams) (*models.GetUsersResponse, error)
 }
 
 // postgresUserRepository implements UserRepository for PostgreSQL
@@ -176,4 +177,163 @@ func (r *postgresUserRepository) DeleteUser(ctx context.Context, id uuid.UUID) (
 	}
 
 	return &userToDelete, nil
+}
+
+// GetAllUsers retrieves users with filtering, sorting, and pagination
+func (r *postgresUserRepository) GetAllUsers(ctx context.Context, filters *models.FilterParams, sort *models.SortParams, pagination *models.PaginationParams) (*models.GetUsersResponse, error) {
+	// Build the base query
+	baseQuery := "SELECT id, email, full_name, phone, role, is_active, created_at, updated_at FROM users"
+	countQuery := "SELECT COUNT(*) FROM users"
+	
+	// Build WHERE clause and arguments
+	whereClause, args := r.buildWhereClause(filters)
+	if whereClause != "" {
+		baseQuery += " WHERE " + whereClause
+		countQuery += " WHERE " + whereClause
+	}
+	
+	// Get total count for pagination
+	var total int
+	err := r.db.GetContext(ctx, &total, countQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total count: %w", err)
+	}
+	
+	// Add ORDER BY clause
+	orderClause := r.buildOrderClause(sort)
+	baseQuery += " " + orderClause
+	
+	// Add LIMIT and OFFSET for pagination
+	baseQuery += " LIMIT $" + fmt.Sprintf("%d", len(args)+1) + " OFFSET $" + fmt.Sprintf("%d", len(args)+2)
+	args = append(args, pagination.PageSize, pagination.Offset)
+	
+	// Execute query
+	var users []models.User
+	err = r.db.SelectContext(ctx, &users, baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users: %w", err)
+	}
+	
+	// Calculate pagination metadata
+	totalPages := (total + pagination.PageSize - 1) / pagination.PageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	
+	paginationMeta := models.PaginationMetadata{
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		Total:      total,
+		TotalPages: totalPages,
+		HasNext:    pagination.Page < totalPages,
+		HasPrev:    pagination.Page > 1,
+	}
+	
+	return &models.GetUsersResponse{
+		Data:       users,
+		Pagination: paginationMeta,
+	}, nil
+}
+
+// buildWhereClause constructs the WHERE clause and returns the clause and arguments
+func (r *postgresUserRepository) buildWhereClause(filters *models.FilterParams) (string, []interface{}) {
+	var conditions []string
+	var args []interface{}
+	argCount := 0
+	
+	if filters == nil {
+		return "", args
+	}
+	
+	if filters.Role != nil {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("role = $%d", argCount))
+		args = append(args, *filters.Role)
+	}
+	
+	if filters.IsActive != nil {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("is_active = $%d", argCount))
+		args = append(args, *filters.IsActive)
+	}
+	
+	if filters.Search != nil && *filters.Search != "" {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("(LOWER(full_name) LIKE LOWER($%d) OR LOWER(email) LIKE LOWER($%d))", argCount, argCount))
+		args = append(args, "%"+*filters.Search+"%")
+	}
+	
+	if filters.EmailDomain != nil && *filters.EmailDomain != "" {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("email LIKE $%d", argCount))
+		args = append(args, "%@"+*filters.EmailDomain+"%")
+	}
+	
+	if filters.CreatedFrom != nil {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argCount))
+		args = append(args, *filters.CreatedFrom)
+	}
+	
+	if filters.CreatedTo != nil {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argCount))
+		args = append(args, *filters.CreatedTo)
+	}
+	
+	if filters.UpdatedFrom != nil {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("updated_at >= $%d", argCount))
+		args = append(args, *filters.UpdatedFrom)
+	}
+	
+	if filters.UpdatedTo != nil {
+		argCount++
+		conditions = append(conditions, fmt.Sprintf("updated_at <= $%d", argCount))
+		args = append(args, *filters.UpdatedTo)
+	}
+	
+	if len(conditions) == 0 {
+		return "", args
+	}
+	
+	whereClause := ""
+	for i, condition := range conditions {
+		if i > 0 {
+			whereClause += " AND "
+		}
+		whereClause += condition
+	}
+	
+	return whereClause, args
+}
+
+// buildOrderClause constructs the ORDER BY clause
+func (r *postgresUserRepository) buildOrderClause(sort *models.SortParams) string {
+	if sort == nil {
+		return "ORDER BY created_at ASC" // Default sorting
+	}
+	
+	// Map field names to database column names
+	fieldMap := map[string]string{
+		"id":         "id",
+		"email":      "email",
+		"full_name":  "full_name",
+		"role":       "role",
+		"is_active":  "is_active",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+	}
+	
+	field, exists := fieldMap[sort.Field]
+	if !exists {
+		field = "created_at" // Default field
+	}
+	
+	order := "ASC"
+	if sort.Order == "desc" {
+		order = "DESC"
+	}
+	
+	return fmt.Sprintf("ORDER BY %s %s", field, order)
 }

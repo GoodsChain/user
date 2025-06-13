@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/GoodsChain/user/internal/models"
 	"github.com/GoodsChain/user/internal/repository"
@@ -159,4 +161,131 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, deletedUser)
+}
+
+// GetAllUsers handles retrieving all users with filtering, sorting, and pagination
+func (h *UserHandler) GetAllUsers(c *gin.Context) {
+	// Parse query parameters
+	var req models.GetUsersRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate query parameters
+	if err := h.validator.Struct(req); err != nil {
+		validationErrors := err.(validator.ValidationErrors)
+		c.JSON(http.StatusBadRequest, gin.H{"error": validationErrors.Error()})
+		return
+	}
+
+	// Parse and convert parameters
+	filters, sort, pagination, err := h.parseQueryParams(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Call repository to get users
+	response, err := h.userRepo.GetAllUsers(c.Request.Context(), filters, sort, pagination)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// parseQueryParams converts GetUsersRequest to repository parameters
+func (h *UserHandler) parseQueryParams(req *models.GetUsersRequest) (*models.FilterParams, *models.SortParams, *models.PaginationParams, error) {
+	// Build FilterParams
+	filters := &models.FilterParams{
+		Role:        req.Role,
+		IsActive:    req.IsActive,
+		Search:      req.Search,
+		EmailDomain: req.EmailDomain,
+	}
+
+	// Parse date strings to time.Time
+	if req.CreatedFrom != nil && *req.CreatedFrom != "" {
+		createdFrom, err := time.Parse("2006-01-02", *req.CreatedFrom)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("invalid created_from date format, use YYYY-MM-DD: %w", err)
+		}
+		filters.CreatedFrom = &createdFrom
+	}
+
+	if req.CreatedTo != nil && *req.CreatedTo != "" {
+		createdTo, err := time.Parse("2006-01-02", *req.CreatedTo)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("invalid created_to date format, use YYYY-MM-DD: %w", err)
+		}
+		// Set to end of day
+		createdTo = createdTo.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		filters.CreatedTo = &createdTo
+	}
+
+	if req.UpdatedFrom != nil && *req.UpdatedFrom != "" {
+		updatedFrom, err := time.Parse("2006-01-02", *req.UpdatedFrom)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("invalid updated_from date format, use YYYY-MM-DD: %w", err)
+		}
+		filters.UpdatedFrom = &updatedFrom
+	}
+
+	if req.UpdatedTo != nil && *req.UpdatedTo != "" {
+		updatedTo, err := time.Parse("2006-01-02", *req.UpdatedTo)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("invalid updated_to date format, use YYYY-MM-DD: %w", err)
+		}
+		// Set to end of day
+		updatedTo = updatedTo.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		filters.UpdatedTo = &updatedTo
+	}
+
+	// Build SortParams with defaults
+	sortField := "created_at"
+	sortOrder := "asc"
+	
+	if req.SortBy != nil {
+		sortField = *req.SortBy
+	}
+	if req.SortOrder != nil {
+		sortOrder = *req.SortOrder
+	}
+
+	sort := &models.SortParams{
+		Field: sortField,
+		Order: sortOrder,
+	}
+
+	// Build PaginationParams with defaults
+	page := 1
+	pageSize := 10
+
+	if req.Page != nil {
+		page = *req.Page
+	}
+	if req.PageSize != nil {
+		pageSize = *req.PageSize
+	}
+
+	// Validate pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	pagination := &models.PaginationParams{
+		Page:     page,
+		PageSize: pageSize,
+		Offset:   (page - 1) * pageSize,
+	}
+
+	return filters, sort, pagination, nil
 }
