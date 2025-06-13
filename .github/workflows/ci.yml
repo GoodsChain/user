@@ -72,9 +72,3 @@ jobs:
         GOOS=linux GOARCH=amd64 go build -o build/user-api-linux-amd64 .
         GOOS=darwin GOARCH=amd64 go build -o build/user-api-darwin-amd64 .
         GOOS=windows GOARCH=amd64 go build -o build/user-api-windows-amd64.exe .
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: user-api-binaries
-        path: build/
